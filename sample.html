@@ -1,0 +1,647 @@
+<!DOCTYPE HTML>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<title>Sample</title>
+<script>
+function $$$$$(elem)
+{
+var element=elem;
+this.val=function(){
+if(element.value) return element.value;
+throw element.tagName+" doesn't have value property";
+};
+this.innerHTML=function(text){
+element.innerHTML=text;
+};
+}
+function $$$(elementSelector)
+{
+var element;
+if(!elementSelector) throw "Argument is missing";
+if(elementSelector.startsWith("#"))
+{
+var elementId=elementSelector.slice(1);
+element=document.getElementById(elementId);
+if(!element) throw "Invalid id : "+elementId;
+}
+return new $$$$$(element);
+}
+$$$.getJSON=function(jsonObject){
+if(!jsonObject.url) throw "url property is missing in json/url is boolean";
+if(typeof jsonObject.url!="string") throw "url property should be of string type";
+if(jsonObject.success && typeof jsonObject.success!="function") throw "success property should represent a function";
+if(jsonObject.exception && typeof jsonObject.exception!="function") throw "exception property should represent a function";
+if(jsonObject.failed && typeof jsonObject.failed!="function") throw "failed property should represent a function";
+if(jsonObject.queryStringData && typeof jsonObject.queryStringData!="object") throw "queryStringData property should be of object type";
+var url=jsonObject.url;
+if(jsonObject.queryStringData)
+{
+var keys=Object.keys(jsonObject.queryStringData);
+if(keys.length>0)
+{
+url+="?"+keys[0]+"="+encodeURI(jsonObject.queryStringData[keys[0]]);
+var i;
+for(i=1;i<keys.length;i++)
+{
+url=url+"&"+keys[i]+"="+encodeURI(jsonObject.queryStringData[keys[i]]);
+}
+}
+}
+var xmlHttpRequest=new XMLHttpRequest();
+xmlHttpRequest.onreadystatechange=function(){
+if(this.readyState==4)
+{
+if(this.status==200)
+{
+var responseString=this.responseText;
+var responseJSON=JSON.parse(responseString);
+if(responseJSON.success)
+{
+if(jsonObject.success) jsonObject.success(responseJSON.response);
+}
+else
+{
+if(jsonObject.exception) jsonObject.exception(responseJSON.exception);
+}
+}
+else
+{
+if(jsonObject.failed) jsonObject.failed();
+}
+}
+};
+xmlHttpRequest.open("GET",url,true);
+xmlHttpRequest.send();
+};
+$$$.postJSON=function(jsonObject){
+if(!jsonObject.url) throw "url property is missing in json/url is boolean";
+if(jsonObject.url && typeof jsonObject.url!="string") throw "url property should be of string type";
+if(jsonObject.success && typeof jsonObject.success!="function") throw "success property should represent a function";
+if(jsonObject.exception && typeof jsonObject.exception!="function") throw "exception property should represent a function";
+if(jsonObject.failed && typeof jsonObject.failed!="function") throw "failed property should represent a function";
+var data;
+if(jsonObject.data) data=JSON.stringify(jsonObject.data);
+var xmlHttpRequest=new XMLHttpRequest();
+xmlHttpRequest.onreadystatechange=function(){
+if(this.readyState==4)
+{
+if(this.status==200)
+{
+var responseString=this.responseText;
+var responseJSON=JSON.parse(responseString);
+if(responseJSON.success)
+{
+if(jsonObject.success) jsonObject.success(responseJSON.response);
+}
+else
+{
+if(jsonObject.exception) jsonObject.exception(responseJSON.exception);
+}
+}
+else
+{
+if(jsonObject.failed) jsonObject.failed();
+}
+}
+};
+xmlHttpRequest.open("POST",jsonObject.url,true);
+xmlHttpRequest.setRequestHeader("Content-type","x-www-form-urlencoded");
+xmlHttpRequest.send(data);
+};
+
+$$$.setProperty=function(pointer,path,value){
+var pathList=path.split(/\[|\]\.|\./g);
+var i;
+var p=pointer,key;
+for(i=0;i<pathList.length-1;i++)
+{
+key=pathList[i];
+if(p.hasOwnProperty(key)==false) throw "Invalid property : "+key;
+p=p[key];
+}
+key=pathList[i];
+p[key]=value;
+};
+$$$.getProperty=function(pointer,path){
+var pathList=path.split(/\[|\]\.|\./g);
+var i;
+var p=pointer,key;
+for(i=0;i<pathList.length;i++)
+{
+key=pathList[i];
+if(p.hasOwnProperty(key)==false) return null;
+p=p[key];
+}
+return p;
+};
+
+$$$.setModel=function(model){
+var list=[];
+
+//helper function area starts
+
+var setModelProperty=function(path,value)
+{
+$$$.setProperty(model,path,value);
+};
+var getModelProperty=function(path){
+return $$$.getProperty(model,path);
+};
+
+$$$.callFunction=function(thisArg,callBack,...args){
+if(args.length==0) return callBack.apply(thisArg);
+return callBack.apply(thisArg,args);
+};
+var callModelFunction=function(callBack,...args){
+if(args.length==0) return $$$.callFunction(model,callBack);
+var newArgs=[];
+var i,modelProperty;
+for(i=0;i<args.length;i++)
+{
+modelProperty=getModelProperty(args[i]);
+if(modelProperty==null) throw "Invalid argument : "+args[i];
+newArgs.push(modelProperty);
+}
+return $$$.callFunction(model,callBack,newArgs);
+}
+var twoWayObserver=function(b)
+{
+var presentValueOfProperty;
+var presentValueOfNode;
+var lastValueOfProperty="";
+var lastValueOfNode="";
+var observe=function()
+{
+presentValueOfProperty=getModelProperty(b.property);
+presentValueOfNode=b.node.value;
+if(presentValueOfNode!=lastValueOfNode) 
+{
+setModelProperty(b.property,presentValueOfNode);
+lastValueOfProperty=presentValueOfProperty;
+lastValueOfNode=b.node.value;
+}
+if(presentValueOfProperty!=lastValueOfProperty)
+{
+b.node.value=presentValueOfProperty; 
+lastValueOfNode=b.node.value;
+lastValueOfProperty=presentValueOfProperty;
+}
+setTimeout(observe,500);
+}
+observe();
+};
+var oneWayObserver=function(b)
+{
+var last=[];
+var lastValueOfColumnTitle=[];
+var observe=function()
+{
+var i,j;
+var tableModel,numberOfRows,numberOfColumns,columnTitle;
+var thead,tbody,tr,th,td,textNode,attribute,temp;
+if(b.node.nodeName=="TABLE")
+{
+attribute=b.node.getAttribute("tableModel").trim();
+tableModel=getModelProperty(attribute);
+if(tableModel==null) throw "Table Model required.";
+numberOfRows=tableModel.getRowCount();
+numberOfColumns=tableModel.getColumnCount();
+columnTitle=tableModel.getColumnTitle();
+for(i=0;i<numberOfColumns && lastValueOfColumnTitle[i]==columnTitle[i];i++);
+
+if(i<numberOfColumns)
+{
+if(b.node.tHead) b.node.tHead.remove();
+thead=b.node.createTHead();
+tr=document.createElement("tr");
+for(i=0;i<numberOfColumns;i++)
+{
+th=document.createElement("th");
+textNode=document.createTextNode(columnTitle[i]);
+th.appendChild(textNode);
+tr.appendChild(th);
+lastValueOfColumnTitle[i]=columnTitle[i];
+}
+thead.appendChild(tr);
+}
+for(i=0;i<numberOfRows;i++)
+{
+for(j=0;j<numberOfColumns && last[i] && last[i][j]==tableModel.getValueAt(i,j);j++);
+if(j<numberOfColumns) break;
+}
+if(i<numberOfRows && numberOfRows!=0)
+{
+if(b.node.tBodies[0]) b.node.tBodies[0].remove();
+tbody=b.node.createTBody();
+last=[];
+for(i=0;i<numberOfRows;i++)
+{
+tr=document.createElement("tr");
+temp=[];
+for(j=0;j<numberOfColumns;j++)
+{
+td=document.createElement("td");
+textNode=document.createTextNode(tableModel.getValueAt(i,j));
+td.appendChild(textNode);
+tr.appendChild(td);
+temp[j]=tableModel.getValueAt(i,j);
+}
+tbody.appendChild(tr);
+last.push(temp);
+}
+}
+}
+setTimeout(observe,500);
+};
+observe();
+};
+var textNodeObserver=function(b){
+if(b.node.nodeType!=3) throw "Invaid node"; 
+var last=[];
+var itemsList;
+var property,i,data;
+var regex=/{{{[A-Za-z\$_][A-Za-z0-9\$_\[\]\.]*}}}/g;
+itemsList=b.text.match(regex).filter(function(element,index,array){return (array.indexOf(element)==index);});
+var observe=function(){
+var i;
+var data=b.text;
+for(i=0;i<itemsList.length && last[i]==getModelProperty(itemsList[i].substring(3,itemsList[i].length-3));i++);
+if(i<itemsList.length)
+{
+for(i=0;i<itemsList.length;i++)
+{
+property=itemsList[i].substring(3,itemsList[i].length-3);
+data=data.split(itemsList[i]).join(getModelProperty(property));
+last[i]=getModelProperty(property);
+}
+b.node.replaceData(0,b.node.data.length,data);
+}
+setTimeout(observe,500);
+};
+observe();
+};
+
+//helper function area ends
+
+var i,j,node,iterator,attributevar,functionVariable;
+iterator=document.createTreeWalker(document.body,NodeFilter.SHOW_ALL,{acceptNode:function(node){return NodeFilter.FILTER_ACCEPT;}},false);
+var textNodeString="";
+var nodeIterator,cNode,cloneNode,g,loopType;
+var variable,from,to,step,collection;
+do
+{
+node=iterator.currentNode;
+if(node.nodeType!=3 && node.nodeType!=8 && node.hasAttribute("tm-for"))
+{
+attribute=node.getAttribute("tm-for").trim();
+node.removeAttribute("tm-for");
+g=attribute.split(/\s+/g);
+if(g.length>3) g=attribute.split(/\s+=\s+|\s+=|=\s+|\s+|=/g);
+//validation
+if(g.length!=3 && g.length!=6) throw "Invalid syntax : "+attribute;
+if(g.length==6)
+{
+if(attribute.substring(g[0].length,attribute.search(g[1])).trim()!='=' || g[2]!='to' || g[4]!='step') throw "Invalid attribute : "+attribute;
+if(g[0].match(/[A-Za-z\$_][A-Za-z0-9\$_]*/)[0].length!=g[0].length) throw "Invalid "+g[0]+" : "+attribute;
+if(getModelProperty(g[0])!=null) throw "Variable "+g[0]+" already exist";
+variable=g[0];
+from=parseInt(g[1]);
+if(isNaN(from)) throw "Invalid "+g[1]+" : "+attribute;
+to=parseInt(g[3]);
+if(isNaN(to)) throw "Invalid "+g[3]+" : "+attribute;
+step=parseInt(g[5]);
+if(isNaN(step)) throw "Invalid "+g[5]+" : "+attribute;
+loopType=0;
+}
+if(g.length==3) loopType=1;
+if(loopType==0)
+{
+for(i=from;(step>0)?i<=to:i>=to;i+=step)
+{
+cloneNode=node.cloneNode(true);
+nodeIterator=document.createTreeWalker(cloneNode,NodeFilter.SHOW_ALL,{acceptNode:function(node){return NodeFilter.FILTER_ACCEPT;}},false);
+nodeIterator.nextNode();
+do
+{
+cNode=nodeIterator.currentNode;
+if(cNode.nodeType==3 && cNode.data.search("{{{"+variable+"}}}")!=-1)
+{
+cNode.replaceData(0,cNode.data.length,cNode.data.split("{{{"+variable+"}}}").join(i));
+}
+}while(nodeIterator.nextNode())
+node.parentNode.insertBefore(cloneNode,node);
+iterator.previousSibling();
+}
+iterator.previousSibling();
+node.remove();
+}
+if(loopType==1)
+{
+if(g[1]!='in') throw "Invalid syntax : "+attribute;
+if(g[0].match(/[A-Za-z\$_][A-Za-z0-9\$_]*/)[0].length!=g[0].length) throw "Invalid "+g[0]+" : "+attribute;
+if(getModelProperty(g[0])!=null) throw "Attribute tm-for : '"+attribute+"', '"+g[0]+"' already exist.";
+variable=g[0];
+if(g[2].match(/[A-Za-z\$_][A-Za-z0-9\$_]*/)[0].length!=g[2].length || getModelProperty(g[2])==null ) throw "Invalid '"+g[2]+"' in '"+attribute+"'";
+collection=getModelProperty(g[2]);
+for(i=0;i<collection.length;i++)
+{
+cloneNode=node.cloneNode(true);
+nodeIterator=document.createTreeWalker(cloneNode,NodeFilter.SHOW_ALL,{acceptNode:function(node){return NodeFilter.FILTER_ACCEPT;}},false);
+nodeIterator.nextNode();
+do
+{
+cNode=nodeIterator.currentNode;
+if(cNode.nodeType==3)
+{
+var regex1=new RegExp('{{{'+variable+'\.[A-Za-z0-9\$_\\[\\]\\.]*}}}','g');
+variablesList=cNode.data.match(regex1);
+if(variablesList!=null) 
+{
+variablesList=variablesList.filter(function(element,index,array){return (array.indexOf(element)==index);});
+for(j=0;j<variablesList.length;j++)
+{
+g=variablesList[j].substring(variable.length+4,variablesList[j].length-3);
+cNode.replaceData(0,cNode.data.length,cNode.data.split(variablesList[j]).join($$$.getProperty(collection[i],g)));
+}
+}
+}
+}while(nodeIterator.nextNode())
+node.parentNode.insertBefore(cloneNode,node);
+iterator.previousSibling();
+}
+iterator.previousSibling();
+node.remove();
+}
+}
+if(node.nodeType!=3 && node.nodeType!=8 && node.hasAttribute("tm-if"))
+{
+attribute=node.getAttribute("tm-if");
+g=attribute.split(/\s+|=='?"?|'|"/g).filter(function(element,index,array){return element.length!=0;});
+if(g.length!=2) throw "Invalid syntax : "+attribute;
+if(g[0].match(/[A-Za-z\$_][A-Za-z0-9\$_]*/)[0].length!=g[0].length) throw "Invalid "+g[0]+" : "+attribute;
+if(getModelProperty(g[0])!=g[1])
+{
+iterator.nextSibling();
+node.remove();
+}
+}
+if(node.nodeType==3)
+{
+if(node.data.match(/{{{[A-Za-z\$_][A-Za-z0-9\$_\[\]\.]*}}}/g)!=null) 
+{
+functionVariable=node.data.match(/{{{\$\$[A-Za-z0-9\$_]*}}}/g);
+if(functionVariable!=null)
+{
+functionVariable=functionVariable[0];
+if(typeof getModelProperty(functionVariable.substring(5,functionVariable.length-3))=="function")
+{
+j=callModelFunction(getModelProperty(functionVariable.substring(5,functionVariable.length-3)));
+node.replaceData(0,node.data.length,node.data.split(functionVariable).join(j));
+}
+}
+if(node.data.match(/{{{[A-Za-z\$_][A-Za-z0-9\$_\[\]\.]*}}}/g)!=null) list.push({"node":node,"text":node.data});
+}
+}
+if(node.nodeType!=3 && node.nodeType!=8 && node.hasAttribute("tm-bind"))
+{
+attribute=node.getAttribute("tm-bind").trim();
+if(getModelProperty(attribute)!=null) list.push({"node":node,"property":attribute});
+}
+}while(iterator.nextNode())
+for(i=0;i<list.length;i++)
+{
+if(list[i].node.nodeName=="INPUT") twoWayObserver(list[i]);
+else if(list[i].node.nodeType==3) textNodeObserver(list[i]);
+else if(list[i].node.nodeName=="TABLE")  oneWayObserver(list[i]);
+}
+};
+</script>
+<script>
+function Employee(firstName,lastName)
+{
+this.firstName=firstName;
+this.lastName=lastName;
+}
+function DataModel()
+{
+this.employee=new Employee("Amit","Sharma");
+
+this.students=[
+{"studentId":"STU12","name":"Harsh","book":{"code":2,"title":"The Power of Now"},"gender":"M","dateOfBirth":"5/1/1999","isIndian":false,"basicSalary":2000,"panNumber":"AEP128721","aadharCardNumber":"6894560916222"},
+{"studentId":"STU67","name":"Geeta","book":{"code":6,"title":"Wings of fire"},"gender":"F","dateOfBirth":"6/10/1997","isIndian":true,"basicSalary":10000,"panNumber":"AEP122171","aadharCardNumber":"289456321900"},
+{"studentId":"STU41","name":"Ramu","book":{"code":3,"title":"Elon Musk"},"gender":"M","dateOfBirth":"6/6/2000","isIndian":true,"basicSalary":25000,"panNumber":"AEP121041","aadharCardNumber":"5894563211155"},
+{"studentId":"STU7","name":"Ramesh","book":{"code":1,"title":"Officer"},"gender":"M","dateOfBirth":"6/5/1998","isIndian":false,"basicSalary":10000,"panNumber":"AEP122792","aadharCardNumber":"889456364271"},
+{"studentId":"STU23","name":"Montu","book":{"code":3,"title":"Thoughts of power"},"gender":"M","dateOfBirth":"6/12/2004","isIndian":true,"basicSalary":40000,"panNumber":"AEP121309","aadharCardNumber":"789456309202"},
+{"studentId":"STU20","name":"Yash","book":{"code":5,"title":"Wings of fire"},"gender":"M","dateOfBirth":"6/11/2001","isIndian":true,"basicSalary":40000,"panNumber":"AEP122346","aadharCardNumber":"1981026321102"},
+{"studentId":"STU15","name":"Rakesh","book":{"code":5,"title":"Wings of fire"},"gender":"M","dateOfBirth":"0/5/1998","isIndian":true,"basicSalary":20000,"panNumber":"AEP122190","aadharCardNumber":"3894563219512"},
+{"studentId":"STU10","name":"Golu","book":{"code":2,"title":"The Power of Now"},"gender":"M","dateOfBirth":"6/3/2004","isIndian":true,"basicSalary":30000,"panNumber":"AEP121782","aadharCardNumber":"489456321989"},
+{"studentId":"STU4","name":"Sita","book":{"code":4,"title":"Elon Musk"},"gender":"F","dateOfBirth":"1/7/2005","isIndian":false,"basicSalary":20000,"panNumber":"AEP1210972","aadharCardNumber":"989456321990"}
+];
+this.tripleCurlyBracketsOpen="{{{";
+this.tripleCurlyBracketsClose="}}}";
+this.name="Hemant Ingle";
+this.getCollegeName=function(){
+return "Ujjain Engineering College";
+};
+var DataModel=this;
+function StudentTableModel()
+{
+var columnTitle=["S.No.","Id","Name","Book","Gender"];
+this.getRowCount=function(){
+return DataModel.students.length;
+};
+this.getColumnCount=function(){
+return columnTitle.length;
+};
+this.getColumnTitle=function()
+{
+return columnTitle;
+};
+this.getValueAt=function(row,column)
+{
+var property="";
+if(column==0) return row+1;
+if(column==1) property="studentId";
+if(column==2) property="name";
+if(column==3) return DataModel.students[row].book.title;
+if(column==4) property="gender";
+return DataModel.students[row][property];
+}
+}
+this.studentTableModel=new StudentTableModel();
+this.mode='view';
+var i=1;
+this.getSerialNumber=function(){
+return i++;
+};
+}
+var dataModel=new DataModel();
+function setEmployeeDetails()
+{
+dataModel.employee.firstName="Hemant";
+dataModel.employee.lastName="Ingle";
+}
+function changeData()
+{
+var row=document.getElementById("eg2Row").value;
+if(row=="" || row<1 || row>dataModel.students.length)
+{
+alert("Invalid row");
+return;
+}
+row=row-1;
+var column=document.getElementById("eg2Column").selectedIndex;
+var data=document.getElementById("eg2Change").value;
+var p;
+if(column==0) p="studentId";
+if(column==1) p="name";
+if(column==2)
+{
+dataModel.students[row].book.title=data;
+return;
+}
+if(column==3) p="gender";
+dataModel.students[row][p]=data;
+}
+function addStudent()
+{
+dataModel.students.push({"studentId":"STU04","name":"Hemant","book":{"code":2,"title":"Wings of fire"},"gender":"M","dateOfBirth":"04/10/1999","isIndian":true,"basicSalary":20000,"panNumber":"AEP128704","aadharCardNumber":"6894519990104"});
+}
+function test()
+{
+$$$.setModel(dataModel);
+}
+window.addEventListener("load",test);
+</script>
+<style>
+//Copied it from bootstrap.min.css
+table
+{
+border-collapse:collapse;
+}
+.table
+{
+width:100%;
+margin-bottom:1rem;
+color:#212529;
+}
+.table td,.table th
+{
+padding:.75rem;
+vertical-align:top;
+border-top:1px solid #dee2e6;
+}
+.table thead th
+{
+vertical-align:bottom;
+border-bottom:2px solid #dee2e6
+}
+.table tbody+tbody
+{
+border-top:2px solid #dee2e6;
+}
+.table-striped tbody tr:nth-of-type(odd)
+{
+background-color:rgba(0,0,0,.05);
+}
+</style>
+</head>
+<body>
+<div>
+<h2>Example 1</h2>
+<h3><u>tm-bind</u>: input</h3>
+First Name <input type='text' tm-bind='employee.firstName' id='eg1FirstNameInput' name='first_name'><br><br>
+Last Name <input type='text' tm-bind='employee.lastName' id='eg1LastNameInput' name='last_name'><br><br>
+<button onclick='setEmployeeDetails()'>Set Properties</button>&nbsp;&nbsp;
+<h3>
+First name : {{{employee.firstName}}}<br>
+Last name : {{{employee.lastName}}}
+</h3>
+</div>
+<hr>
+<div>
+<h2>Example 2</h2>
+<h3><u>tm-bind</u>: table (if table model is provided)</h3>
+<table class='table table-striped' tm-bind="students" tableModel="studentTableModel"></table>
+
+<h3>Change data</h3>
+Row Number : <input type='text' id='eg2Row' name='row'>&nbsp;&nbsp;
+Columen <select id='eg2Column'>
+<option>Id</option>
+<option>Name</option>
+<option>Book</option>
+<option>Gender</option>
+</select> &nbsp;&nbsp;
+change to : <input type='text' id='eg2Change' name='change'>&nbsp;&nbsp;
+<button type='button' onclick='changeData()'>Click here to change data</button>
+<br><br>
+<h3>Add Student</h3>
+<button onclick="addStudent()">Add Student</button>
+<h3>Data is changed in the list(students) and therefore the table is recreated by the observer.</h3>
+</div>
+<hr>
+<div>
+<h2>Example 3</h2>
+<h3><u>{{{something}}}</u></h3>
+<ul>
+<li><span>{{{</span>name<span>}}}</span> => {{{name}}}</li>
+<li><span>{{{</span>employee.firstName<span>}}}</span> => {{{employee.firstName}}}</li>
+<li><span>{{{</span>students[1].book.title<span>}}}</span> => {{{students[1].book.title}}}</li>
+<li><span>{{{</span>students[5].name<span>}}}</span> => {{{students[5].name}}}</li>
+<li><span>{{{$$</span>getCollegeName}}}</span> => {{{$$getCollegeName}}}</li>
+</ul>
+<h3>if user write <span>{{{$$</span>propertyName}}}</span> then it is assumed that the property is a function and <span>{{{$$</span>propertyName}}}</span> will be replaced by the result returned by function.</h3>
+</div>
+<hr>
+<div>
+<h2>Example 4</h2>
+<h3><u>tm-for</u>='x=1 to 5 step 1'</h3>
+<h3 tm-for='x=1 to 5 step 1'>
+Hello <span>{{{</span>students[<span>{{{</span>x<span>}}}</span>].name<span>}}}</span> => Hello {{{students[{{{x}}}].name}}}
+</h3>
+</div>
+<hr>
+<div>
+<h2>Example 5</h2>
+<h3><u>tm-for</u>='s in students'</h3>
+<table class='table table-striped'>
+<thead>
+<tr>
+<th>S.No.</th>
+<th>Id</th>
+<th>Name</th>
+<th>Book</th>
+<th>Gender</th>
+</tr>
+</thead>
+<tbody>
+<tr tm-for='s in students'>
+<td>{{{$$getSerialNumber}}}</td>
+<td>{{{s.studentId}}}</td>
+<td>{{{s.name}}}</td>
+<td>{{{s.book.title}}}</td>
+<td>{{{s.gender}}}</td>
+</tr>
+</tbody>
+</table>
+<h3><span>{{{$$</span>getSerialNumber<span>}}}</span> is used for S.No.</h3>
+</div>
+<hr>
+<div>
+<h2>Example 6</h2>
+<h3><u>tm-if</u>="mode=='view'"</h3>
+<div tm-if="mode=='view'">
+<h1>This text is visible</h1>
+<br>
+</div>
+<h3><u>tm-if</u>="mode=='add'"</h3>
+<div tm-if="mode=='add'">
+<h1>This text is not visible</h1>
+<br>
+</div>
+<br><br>
+</div>
+<hr>
+</body>
+</html>
